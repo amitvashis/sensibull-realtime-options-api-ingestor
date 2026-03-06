@@ -10,9 +10,7 @@ on:
 jobs:
   collect-nifty-data:
     runs-on: ubuntu-latest
-    # 6h20m = 380 min covers 9:15 AM to 3:35 PM IST
-    # NOTE: GitHub-hosted runners have a 6-hour (360 min) max.
-    #       Use a self-hosted runner if you need the full 380 min.
+    # 6h = 360 min (GitHub-hosted runner max)
     timeout-minutes: 360
 
     steps:
@@ -28,17 +26,33 @@ jobs:
         working-directory: realtime-data
         run: npm install
 
-      - name: Run Nifty data collection
+      - name: Run Nifty data collection (every 5 min)
         working-directory: realtime-data
         env:
-          SENSIBULL_TIMEOUT_MS: '22200000'
-          SENSIBULL_MAX_RECONNECTS: '50'
-        run: node main.js --symbols NIFTY
+          SENSIBULL_TIMEOUT_MS: '180000'
+          SENSIBULL_MAX_RECONNECTS: '10'
+        run: |
+          node collect-historical.js \
+            --symbols NIFTY \
+            --interval-seconds 300 \
+            --stale-stop-runs 3 \
+            --to-csv
+
+      - name: Commit and push data
+        if: always()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add realtime-data/scrapped_data/ realtime-data/csv_data/
+          git diff --cached --quiet || git commit -m "data: NIFTY snapshot $(date -u +'%Y-%m-%d')"
+          git push
 
       - name: Upload collected data
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: nifty-data-${{ github.run_id }}
-          path: realtime-data/scrapped_data/
+          path: |
+            realtime-data/scrapped_data/
+            realtime-data/csv_data/
           retention-days: 30
