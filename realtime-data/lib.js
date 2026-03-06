@@ -1,6 +1,20 @@
 
 const instruments = require('./instruments_symbols.js');
 
+const instrumentCache = (() => {
+    if (instruments && instruments.iCache instanceof Map) {
+        return instruments.iCache;
+    }
+
+    const cache = new Map();
+    try {
+        instruments.iCache = cache;
+    } catch (error) {
+        // If the import is immutable, continue with local cache only.
+    }
+    return cache;
+})();
+
 
 function decodeUint8ArrayToTimestamp(uint8Array) {
     let timestampString = "";
@@ -589,7 +603,7 @@ function XR(e) {
         case WR.OPTION_CHAIN:
             let _payload = BR(t.slice(1));
             // console.log('token' , _payload.token)
-            let snapshot = instruments.iCache.get(_payload.token);
+            let snapshot = instrumentCache.get(_payload.token);
             return {
                 token: _payload.token, expiry: _payload.expiry, kind: JR.OPTION_CHAIN, packetId: i, payload: _payload ,  snapshot: snapshot
             };
@@ -797,7 +811,7 @@ function XR(e) {
             if (e) {
 
                 let insrumentToken = e.instrumentToken;
-                instruments.iCache.set(insrumentToken, e);
+                instrumentCache.set(insrumentToken, e);
 
                 return {
                     token: 'ALL',
@@ -850,10 +864,104 @@ function test() {
 const output_dir = 'scrapped_data'
 
 var fs = require('fs');
+var path = require('path');
 var dir = `./${output_dir}`;
 
 if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir);
+}
+
+const signatureStateFile = path.join(dir, '.last-signatures.json');
+let signatureStateLoaded = false;
+let signatureState = {};
+
+function loadSignatureState() {
+    if (signatureStateLoaded) {
+        return;
+    }
+
+    signatureStateLoaded = true;
+    if (!fs.existsSync(signatureStateFile)) {
+        signatureState = {};
+        return;
+    }
+
+    try {
+        signatureState = JSON.parse(fs.readFileSync(signatureStateFile, 'utf8')) || {};
+    } catch (error) {
+        signatureState = {};
+    }
+}
+
+function saveSignatureState() {
+    try {
+        fs.writeFileSync(signatureStateFile, JSON.stringify(signatureState), 'utf8');
+    } catch (error) {
+        // Ignore state write errors to avoid interrupting data collection.
+    }
+}
+
+function getLastNonEmptyLine(filePath) {
+    try {
+        const content = fs.readFileSync(filePath, 'utf8');
+        const lines = content.split(/\r?\n/).filter((line) => line.trim().length > 0);
+        if (!lines.length) {
+            return null;
+        }
+        return lines[lines.length - 1];
+    } catch (error) {
+        return null;
+    }
+}
+
+function normalizeForSignature(value) {
+    if (Array.isArray(value)) {
+        return value.map((item) => normalizeForSignature(item));
+    }
+
+    if (!value || typeof value !== 'object') {
+        return value;
+    }
+
+    const ignoredKeys = new Set([
+        'collection_timestamp_utc',
+        'collection_received_utc'
+    ]);
+
+    const normalized = {};
+    Object.keys(value)
+        .filter((key) => !ignoredKeys.has(key))
+        .sort()
+        .forEach((key) => {
+            normalized[key] = normalizeForSignature(value[key]);
+        });
+    return normalized;
+}
+
+function buildSignature(data) {
+    return JSON.stringify(normalizeForSignature(data));
+}
+
+function primeSignatureForFile(stateKey, outputFile) {
+    if (signatureState[stateKey] !== undefined) {
+        return;
+    }
+
+    if (!fs.existsSync(outputFile)) {
+        return;
+    }
+
+    const lastLine = getLastNonEmptyLine(outputFile);
+    if (!lastLine) {
+        return;
+    }
+
+    try {
+        const lastObject = JSON.parse(lastLine);
+        signatureState[stateKey] = buildSignature(lastObject);
+    } catch (error) {
+        // Ignore malformed trailing lines.
+    }
 }
 
 function print(data) {
@@ -861,9 +969,27 @@ function print(data) {
 
 
     const jsonObject = data;
-    if (data.token)
-        fs.appendFileSync(`${dir}/${data.token}:${data.expiry}.json`, '\r\n' + JSON.stringify(jsonObject));
+    if (!data.token) {
+        return false;
+    }
 
+    const safeToken = String(data.token).replace(/[<>:"/\\|?*\x00-\x1F]/g, '_');
+    const safeExpiry = String(data.expiry).replace(/[<>:"/\\|?*\x00-\x1F]/g, '_');
+    const outputFile = `${dir}/${safeToken}_${safeExpiry}.jsonl`;
+    const stateKey = path.basename(outputFile);
+
+    loadSignatureState();
+    primeSignatureForFile(stateKey, outputFile);
+
+    const signature = buildSignature(jsonObject);
+    if (signatureState[stateKey] === signature) {
+        return false;
+    }
+
+    fs.appendFileSync(outputFile, JSON.stringify(jsonObject) + '\n');
+    signatureState[stateKey] = signature;
+    saveSignatureState();
+    return true;
 
 
 }

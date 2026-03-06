@@ -5,7 +5,9 @@
   "main": "main.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "node  main.js"
+    "start": "node  main.js",
+    "to-csv": "node convert-to-csv.js",
+    "collect:1m": "node collect-historical.js --interval-seconds 60"
   },
   "author": "",
   "license": "ISC",

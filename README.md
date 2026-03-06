@@ -28,11 +28,52 @@ Follow these steps to get started with the Sensibull Options Chain WebSocket Dat
    npm start
    ```
 
+   Input-based extraction (example: NIFTY strikes 25000-26000 for next 3 months):
+
+   ```
+   cd realtime-data
+   node main.js --symbols NIFTY --strike-min 25000 --strike-max 26000 --months 3
+   ```
+
+   Supported inputs:
+   - `--symbols` comma-separated symbols (example: `NIFTY,BANKNIFTY`)
+   - `--strike-min` lower strike bound
+   - `--strike-max` upper strike bound
+   - `--months` expiry horizon in months
+   - `--timeout-ms` run timeout in milliseconds
+
+   Historical collection every 1 minute (appends to existing JSONL files):
+
+   ```
+   cd realtime-data
+   node collect-historical.js --interval-seconds 60 --symbols NIFTY --strike-min 25000 --strike-max 26000 --months 3
+   ```
+
+   Duplicate protection:
+   - If a snapshot is unchanged, it is not appended again.
+   - Collector auto-stops after repeated stale runs (default: 3).  
+     Use `--stale-stop-runs` to control this.
+
+   Optional: regenerate CSV after each run:
+
+   ```
+   node collect-historical.js --interval-seconds 60 --symbols NIFTY --strike-min 25000 --strike-max 26000 --months 3 --to-csv
+   ```
+
 
 <img width="222" alt="Screenshot 2023-10-26 at 3 12 33 PM" src="https://github.com/studiogangster/realtime-option-algo-trader/assets/12793420/314a00b3-ff84-4c52-9798-5387e0aeea1c">
 <img width="526" alt="Screenshot 2023-10-26 at 3 14 16 PM" src="https://github.com/studiogangster/realtime-option-algo-trader/assets/12793420/2aeea27c-b7bc-4395-b408-86b6ea749ed0">
 
 4. **Use the Data**: The fetched options data can be used in your trading or analysis projects.
+5. **Convert to CSV**: Convert scraped JSON/JSONL output into a flat CSV.
+
+   ```
+   cd realtime-data
+   npm run to-csv
+   ```
+
+   By default this reads `realtime-data/scrapped_data` and writes:
+   `realtime-data/csv_data/options_chain_all.csv`
    
 # To-Do and Coming Features
 
