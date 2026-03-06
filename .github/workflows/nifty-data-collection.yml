@@ -30,7 +30,10 @@ jobs:
 
       - name: Run Nifty data collection
         working-directory: realtime-data
-        run: node main.js --symbols NIFTY --timeout-ms 22200000 --max-reconnects 50
+        env:
+          SENSIBULL_TIMEOUT_MS: '22200000'
+          SENSIBULL_MAX_RECONNECTS: '50'
+        run: node main.js --symbols NIFTY
 
       - name: Upload collected data
         if: always()
