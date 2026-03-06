@@ -1,0 +1,41 @@
+name: Nifty Data Collection
+
+on:
+  schedule:
+    # 9:15 AM IST = 3:45 AM UTC (Mon-Fri)
+    - cron: '45 3 * * 1-5'
+
+  workflow_dispatch: # Allow manual trigger
+
+jobs:
+  collect-nifty-data:
+    runs-on: ubuntu-latest
+    # 6h20m = 380 min covers 9:15 AM to 3:35 PM IST
+    # NOTE: GitHub-hosted runners have a 6-hour (360 min) max.
+    #       Use a self-hosted runner if you need the full 380 min.
+    timeout-minutes: 360
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        working-directory: realtime-data
+        run: npm install
+
+      - name: Run Nifty data collection
+        working-directory: realtime-data
+        run: node main.js --symbols NIFTY --timeout-ms 22200000 --max-reconnects 50
+
+      - name: Upload collected data
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nifty-data-${{ github.run_id }}
+          path: realtime-data/scrapped_data/
+          retention-days: 30
