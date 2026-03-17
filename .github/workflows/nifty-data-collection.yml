@@ -44,7 +44,7 @@ jobs:
         run: |
           git config user.name "amitvashis"
           git config user.email "aamitvashistha1997@gmail.com"
-          git add realtime-data/scrapped_data/ realtime-data/csv_data/
+          git add -f realtime-data/scrapped_data/ realtime-data/csv_data/
           git diff --cached --quiet || git commit -m "data: NIFTY snapshot $(date -u +'%Y-%m-%d')"
           git push
 
